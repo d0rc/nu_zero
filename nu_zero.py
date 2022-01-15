@@ -1,3 +1,5 @@
+import os
+
 import torch
 import torch.nn as nn
 import random
@@ -41,6 +43,8 @@ class RLDynamicsNetwork(nn.Module):
             nn.Linear(in_features=internal_representation_size + actions_size,
                       out_features=hidden_size),
             nn.ReLU(),
+            nn.Linear(in_features=hidden_size, out_features=hidden_size),
+            nn.ReLU(),
             nn.Linear(in_features=hidden_size,
                       out_features=internal_representation_size + reward_size),
             nn.Tanh(),
@@ -57,13 +61,17 @@ class RLDynamicsNetwork(nn.Module):
 
 
 class RLPredictionNetwork(nn.Module):
-    def __init__(self, internal_representation_size, actions_size, reward_size):
+    def __init__(self, internal_representation_size, actions_size, reward_size, hidden_size=128):
         super().__init__()
         self.reward_size = reward_size
         self.internal_representation_size = internal_representation_size
         self.actions_size = actions_size
         self.model = nn.Sequential(
-            nn.Linear(in_features=internal_representation_size, out_features=actions_size + reward_size),
+            nn.Linear(in_features=internal_representation_size, out_features=hidden_size),
+            nn.ReLU(),
+            nn.Linear(in_features=hidden_size, out_features=hidden_size),
+            nn.ReLU(),
+            nn.Linear(in_features=hidden_size, out_features=actions_size + reward_size),
             nn.Tanh(),
         )
 
@@ -248,34 +256,57 @@ class RLRoutine(nn.Module):
         return torch.optim.Adam(self.parameters(), lr=self.lr)
 
     def train_run(self,
-                  epochs=5000,
-                  self_play_steps=50,
-                  replay_steps=10,
-                  reset_game=True):
+                  epochs: int = 5000,
+                  self_play_steps: int = 50,
+                  replay_steps: int = 10,
+                  reset_game: bool = True,
+                  initial_agent_score_min: float = -0.2,
+                  save_best: str = None):
+        best_score = -100
+        if save_best is not None:
+            try:
+                os.remove(save_best)
+            except FileNotFoundError:
+                pass
+
         for epoch in range(epochs):
             self.eval()
             self.play_n_steps(self_play_steps, reset=reset_game)
             self.train()
 
-            total_replay_steps = int(len(self.replay_buffer) / replay_steps)
-            with tqdm.tqdm(range(total_replay_steps)) as pbar:
-                game_state = torch.sum(self.game.state).item()
-                game_result = self.game.compute_reward().item()
-                pbar.set_description("e:%d gs:%f gr:%f" % (
-                    epoch,
-                    game_state,
-                    game_result,
-                ))
+            game_result = self.game.compute_reward().item()
+            game_state = torch.sum(self.game.state).item()
+            if epoch == 0 and (initial_agent_score_min is not None) and (game_state > initial_agent_score_min):
+                print("initial agent is too good...!")
+                return
+            if save_best is not None and best_score < game_result:
+                print("saving best model")
+                torch.save(self.state_dict(), save_best)
+                best_score = game_result
 
-                for step in pbar:
-                    self.logger.log(
-                        epoch=epoch,
-                        game_state=game_state,
-                        game_result=game_result,
-                        step=step,
-                        max_step=total_replay_steps
-                    )
-                    self.optimizer.zero_grad()
-                    loss = self.replay(replay_steps, pbar=pbar)
-                    loss.backward()
-                    self.optimizer.step()
+            if save_best is not None and game_result < best_score:
+                print("loaded previous better model")
+                self.load_state_dict(torch.load(save_best))
+
+            for learning_epoch in range(3):
+                total_replay_steps = int(len(self.replay_buffer) / replay_steps)
+                with tqdm.tqdm(range(total_replay_steps)) as pbar:
+                    pbar.set_description("e:%d[%d] gs:%f gr:%f" % (
+                        epoch,
+                        learning_epoch,
+                        game_state,
+                        game_result,
+                    ))
+
+                    for step in pbar:
+                        self.logger.log(
+                            epoch=epoch,
+                            game_state=game_state,
+                            game_result=game_result,
+                            step=step,
+                            max_step=total_replay_steps
+                        )
+                        self.optimizer.zero_grad()
+                        loss = self.replay(replay_steps, pbar=pbar)
+                        loss.backward()
+                        self.optimizer.step()

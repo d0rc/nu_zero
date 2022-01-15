@@ -19,7 +19,7 @@ class RLGame:
 
 
 class RLMakeItOneGame(RLGame):
-    def __init__(self, observation_size, max_bucket_value=0.2):
+    def __init__(self, observation_size, max_bucket_value=0.1):
         super().__init__(observation_size=observation_size)
         self.hidden_state = 0
         self.max_bucket_value = max_bucket_value
