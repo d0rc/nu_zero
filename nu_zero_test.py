@@ -1,5 +1,6 @@
 from nu_zero import RLRoutine
 from nu_zero_test_games import RLMakeItOneGame
+from nu_zero_logger import RLLogger
 
 rlr = RLRoutine(
     actions_size=4,
@@ -8,7 +9,8 @@ rlr = RLRoutine(
     observation_size=10,
     reward_size=1,
     search_depth=1_000,
-    game=lambda observation_size: RLMakeItOneGame(observation_size=observation_size, max_bucket_value=0.2)
+    game=lambda observation_size: RLMakeItOneGame(observation_size=observation_size, max_bucket_value=0.2),
+    logger=RLLogger,
 )
 
 rlr.train_run(

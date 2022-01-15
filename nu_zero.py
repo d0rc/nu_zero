@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import random
 import tqdm
+from nu_zero_logger import RLLogger
 
 """
 representation:
@@ -83,16 +84,18 @@ class RLReplayRecord:
 
 class RLRoutine(nn.Module):
     def __init__(self,
-                 actions_size,
-                 exploration_rate,
-                 internal_representation_size,
-                 observation_size,
-                 reward_size,
-                 search_depth,
+                 actions_size: int,
+                 exploration_rate: float,
+                 internal_representation_size: int,
+                 observation_size: int,
+                 reward_size: int,
+                 search_depth: int,
                  game,
-                 lr=0.001):
+                 logger,
+                 lr: float = 0.001):
         super().__init__()
         assert(reward_size == 1)
+        self.logger: RLLogger = logger()
         self.search_depth = search_depth
         self.internal_representation_size = internal_representation_size
         self.actions_size = actions_size
@@ -233,6 +236,12 @@ class RLRoutine(nn.Module):
                                  pav=decided_action_value_norm,
                                  loss=step_loss.item(),
                                  refresh=True)
+            if self.logger is not None:
+                self.logger.log(best_action=better_action,
+                                best_action_value=best_item_value,
+                                decided_action=decided_action.detach(),
+                                decided_action_value=decided_action_value_norm,
+                                loss=step_loss.item())
         return torch.sum(torch.stack(losses))
 
     def create_optimizer(self):
@@ -248,14 +257,24 @@ class RLRoutine(nn.Module):
             self.play_n_steps(self_play_steps, reset=reset_game)
             self.train()
 
-            with tqdm.tqdm(range(int(len(self.replay_buffer) / replay_steps))) as pbar:
+            total_replay_steps = int(len(self.replay_buffer) / replay_steps)
+            with tqdm.tqdm(range(total_replay_steps)) as pbar:
+                game_state = torch.sum(self.game.state).item()
+                game_result = self.game.compute_reward().item()
                 pbar.set_description("e:%d gs:%f gr:%f" % (
                     epoch,
-                    torch.sum(self.game.state).item(),
-                    self.game.compute_reward().item(),
+                    game_state,
+                    game_result,
                 ))
 
-                for _ in pbar:
+                for step in pbar:
+                    self.logger.log(
+                        epoch=epoch,
+                        game_state=game_state,
+                        game_result=game_result,
+                        step=step,
+                        max_step=total_replay_steps
+                    )
                     self.optimizer.zero_grad()
                     loss = self.replay(replay_steps, pbar=pbar)
                     loss.backward()
