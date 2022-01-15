@@ -82,8 +82,8 @@ class RLPredictionNetwork(nn.Module):
 
 class RLReplayRecord:
     def __init__(self, episode, step, observed_state_before, executed_action, observed_state_after, observed_reward):
-        self.episode=episode
-        self.step=step
+        self.episode = episode
+        self.step = step
         self.observed_state_before = observed_state_before.detach()
         self.executed_action = executed_action.detach()
         self.observed_state_after = observed_state_after.detach()
@@ -134,18 +134,18 @@ class RLRoutine(nn.Module):
             self.game.reset()
 
         for step in range(n_steps):
-            observed_state_before_action = self.game.state
-            encoded_state = self.representation(observed_state_before_action)
+            observed_state_before = self.game.state
+            encoded_state = self.representation(observed_state_before)
             predicted_action, predicted_action_value = self.prediction(encoded_state)
             if random.random() < self.exploration_rate:
                 predicted_action = torch.rand(self.actions_size)
-            observed_state_after_action, observed_reward = self.game.run_action(predicted_action)
+            observed_state_after, observed_reward = self.game.run_action(predicted_action)
 
             self.replay_buffer = self.replay_buffer + [RLReplayRecord(episode=self.game.episode,
                                                                       step=step,
-                                                                      observed_state_before=observed_state_before_action,
+                                                                      observed_state_before=observed_state_before,
                                                                       executed_action=predicted_action,
-                                                                      observed_state_after=observed_state_after_action,
+                                                                      observed_state_after=observed_state_after,
                                                                       observed_reward=observed_reward)]
 
     def replay(self, n_steps=10, pbar=None):
@@ -161,7 +161,7 @@ class RLRoutine(nn.Module):
                 replay_record.observed_state_after
             ]))
             encoded_state_before = encoded_states[0]
-            encoded_state_after  = encoded_states[1]
+            encoded_state_after = encoded_states[1]
 
             #
             # here we try to imagine ourselves in the situation getting:
@@ -189,7 +189,7 @@ class RLRoutine(nn.Module):
             ])
 
             prediction_on_recorded_action = raw_result[0]
-            prediction_on_decided_action  = raw_result[1]
+            prediction_on_decided_action = raw_result[1]
 
             predicted_next_encoded_state = prediction_on_recorded_action[:self.internal_representation_size]
             predicted_reward = prediction_on_recorded_action[-self.reward_size:]
