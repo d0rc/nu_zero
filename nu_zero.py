@@ -87,7 +87,10 @@ class RLReplayRecord:
         self.observed_state_before = observed_state_before.detach()
         self.executed_action = executed_action.detach()
         self.observed_state_after = observed_state_after.detach()
-        self.observed_reward = observed_reward.detach()
+        if observed_state_after is torch.Tensor:
+            self.observed_reward = observed_reward.detach()
+        else:
+            self.observed_reward = torch.as_tensor(observed_reward)
 
 
 class RLRoutine(nn.Module):
@@ -131,7 +134,7 @@ class RLRoutine(nn.Module):
 
     def play_n_steps(self, n_steps=10, reset=False):
         if reset:
-            self.game.reset()
+            self.game.reset(skip_reward_acc=False)
 
         for step in range(n_steps):
             observed_state_before = self.game.state
@@ -147,6 +150,8 @@ class RLRoutine(nn.Module):
                                                                       executed_action=predicted_action,
                                                                       observed_state_after=observed_state_after,
                                                                       observed_reward=observed_reward)]
+            if self.game.done:
+                self.game.reset(skip_reward_acc=True)
 
     def replay(self, n_steps=10, pbar=None):
         losses = []

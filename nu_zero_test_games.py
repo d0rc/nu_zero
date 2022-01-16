@@ -6,6 +6,7 @@ class RLGame:
         self.observation_size = observation_size
         self.state = torch.zeros(observation_size)
         self.episode = 1
+        self.done = False
 
     def compute_reward(self, s=None):
         pass
