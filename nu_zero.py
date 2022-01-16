@@ -103,10 +103,12 @@ class RLRoutine(nn.Module):
                  search_depth: int,
                  game,
                  logger,
-                 lr: float = 0.001):
+                 lr: float = 0.001,
+                 ignore_predictor_hypothesis: bool = False):
         super().__init__()
         assert(reward_size == 1)
         self.logger: RLLogger = logger()
+        self.ignore_predictor_hypothesis = ignore_predictor_hypothesis
         self.search_depth = search_depth
         self.internal_representation_size = internal_representation_size
         self.actions_size = actions_size
@@ -215,7 +217,7 @@ class RLRoutine(nn.Module):
                     #
                     best_item = torch.argmax(results.T[self.internal_representation_size]).item()
                     best_item_value = results.T[self.internal_representation_size][best_item].item()
-                    if best_item_value > decided_action_value_norm:
+                    if best_item_value > decided_action_value_norm or self.ignore_predictor_hypothesis:
                         better_action = test_actions[best_item]
                         better_action_value = results.T[self.internal_representation_size][best_item]
                         break
@@ -265,7 +267,9 @@ class RLRoutine(nn.Module):
                   self_play_steps: int = 50,
                   replay_steps: int = 10,
                   reset_game: bool = True,
+                  learning_epochs_max: int = 3,
                   initial_agent_score_min: float = -0.2,
+                  learning_stop_loss: float = 0.0,
                   save_best: str = None):
         best_score = -100
         if save_best is not None:
@@ -293,8 +297,9 @@ class RLRoutine(nn.Module):
                 print("loaded previous better model")
                 self.load_state_dict(torch.load(save_best))
 
-            for learning_epoch in range(3):
+            for learning_epoch in range(learning_epochs_max):
                 total_replay_steps = int(len(self.replay_buffer) / replay_steps)
+                learning_epoch_loss = 0.0
                 with tqdm.tqdm(range(total_replay_steps)) as pbar:
                     pbar.set_description("e:%d[%d] gs:%f gr:%f" % (
                         epoch,
@@ -315,3 +320,9 @@ class RLRoutine(nn.Module):
                         loss = self.replay(replay_steps, pbar=pbar)
                         loss.backward()
                         self.optimizer.step()
+                        learning_epoch_loss = learning_epoch_loss + loss.item()
+
+                    if learning_epoch_loss / total_replay_steps < learning_stop_loss:
+                        print("reach minimum required learning loss")
+                        break
+                    print("\nlearning_loss=%3.3f" % (learning_epoch_loss / total_replay_steps))
