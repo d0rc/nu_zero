@@ -45,6 +45,7 @@ class RLDynamicsNetwork(nn.Module):
             nn.ReLU(),
             nn.Linear(in_features=hidden_size, out_features=hidden_size),
             nn.ReLU(),
+            nn.Softmax(),
             nn.Linear(in_features=hidden_size,
                       out_features=internal_representation_size + reward_size),
             nn.Tanh(),
@@ -71,6 +72,7 @@ class RLPredictionNetwork(nn.Module):
             nn.ReLU(),
             nn.Linear(in_features=hidden_size, out_features=hidden_size),
             nn.ReLU(),
+            nn.Softmax(),
             nn.Linear(in_features=hidden_size, out_features=actions_size + reward_size),
             nn.Tanh(),
         )

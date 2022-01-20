@@ -12,7 +12,7 @@ def worker(idx):
     rlr = RLRoutine(
         actions_size=2,
         exploration_rate=0.1,
-        internal_representation_size=16,
+        internal_representation_size=32,
         observation_size=32 * 3,
         reward_size=1,
         search_depth=1_00,
